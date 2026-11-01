@@ -9,7 +9,7 @@ authors:
     given-names: Afroza
   - family-names: Abhi
     given-names: Sarafat Hussain
-repository-code: "https://github.com/abubakarsiddik31/jontro-code"
+repository-code: "https://github.com/abubakarsiddik31/jontro"
 url: "https://huggingface.co/datasets/abubakar-siddik/Jontro"
 license: MIT
 version: 2.0.0
