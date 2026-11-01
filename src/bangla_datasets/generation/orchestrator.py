@@ -31,8 +31,8 @@ class SeedPlan:
 class _ClientLike(Protocol):
     """The generation methods the orchestrator drives.
 
-    Only the two generation methods are needed, so the Protocol is intentionally
-    narrow.
+    The real ``GeminiClient`` also exposes ``judge`` (unused here). Only the two
+    generation methods are needed, so the Protocol is intentionally narrow.
     """
 
     def persona_turn(
@@ -51,13 +51,10 @@ class _ClientLike(Protocol):
 class SelfPlayOrchestrator:
     """Turn-protocol state machine. Intercepts tool calls; simulator injects output.
 
-    Tool-result integrity: the model never produces tool outputs. Every function
-    call the assistant emits is intercepted here and executed deterministically by
-    the simulator, which produces the ``tool`` role message, so the assistant only
-    ever sees simulator-produced tool results. This constrains the ``tool`` messages
-    only; an earlier version of this work over-generalised it as an
-    "anti-hallucination guarantee" covering assistant turns, which it is not (the
-    paper's defect enumeration records assistant turns that assert unverified facts).
+    The anti-hallucination guarantee: Gemini never produces tool outputs. Every
+    function call the assistant emits is intercepted here and executed
+    deterministically by the simulator (Task 3), which produces the ``tool`` role
+    message. The assistant only ever sees simulator-produced tool results.
     """
 
     def __init__(

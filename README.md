@@ -1,117 +1,126 @@
-# Jontro — code accompanying the paper
+# Jontro 2.0: code
 
-Code for **"Jontro: a Bangla tool-use corpus and a first-call diagnostic for
-Bangla-language agents"**.
+Code for **"Jontro: A Multi-Turn Bangla and Banglish Tool-Use Corpus and Benchmark"**
+(Abu Bakar Siddik, Afroza Islam and Sarafat Hussain Abhi; under review).
 
-The corpus itself is a separate deposit:
-<https://huggingface.co/datasets/abubakar-siddik/Jontro> (CC-BY-4.0).
-This repository is the code needed to **use the corpus, verify every number in the
-paper, add your own model to the evaluation, and regenerate the corpus from
-scratch**.
+Jontro is a corpus of 2,000 multi-turn tool-use conversations in Bengali script and
+Romanised Bangla ("Banglish"), covering 16 Bangladeshi service domains. Every tool
+result is computed by a seeded, deterministic simulator, so any tool call in the
+corpus can be replayed byte for byte.
 
-## What this contains
-
-| Path | What it is |
+| Resource | Where |
 |---|---|
-| `src/bangla_datasets/schema.py` | The trajectory schema. Load the corpus with this. |
-| `src/bangla_datasets/tools/catalog.py` | All 54 tool definitions and their JSON schemas. |
-| `src/bangla_datasets/tools/simulators.py` | The deterministic simulators. Every tool result in the corpus is recomputable byte-for-byte from its stored seed with these. |
-| `src/bangla_datasets/tools/registry.py` | Tool lookup, simulator dispatch, and domain-subset selection. |
-| `src/bangla_datasets/validation/` | The three deterministic gates whose pass rates are reported in the paper: schema, consistency (simulator replay), heuristics. |
-| `src/bangla_datasets/utils/seeding.py` | Reproducible seed derivation and the seeded RNG used throughout generation and sampling. |
-| `src/bangla_datasets/utils/script.py` | Bangla script and address-form marker detection. Section 3.2.1 of the paper analyses this module's behaviour directly. |
-| `src/bangla_datasets/eval/` | The evaluation harness: prompt construction, the endpoint client, and scoring. Use this to add a model. |
-| `src/bangla_datasets/splits/` | Partitioning and Parquet I/O for both released splits. |
-| `src/bangla_datasets/gemini/prompts.py` | The prompt templates used to generate the corpus: persona, address-form, and assistant-role system prompts. |
-| `src/bangla_datasets/gemini/client.py` | The typed Gemini provider client for the persona/user and assistant turns. Reads its API key from the `GEMINI_API_KEY`/`GOOGLE_API_KEY` environment variable; no key is stored in this repository. |
-| `src/bangla_datasets/generation/orchestrator.py` | The self-play turn-protocol state machine that drives the persona, user and assistant roles and intercepts tool calls for simulator execution. |
-| `src/bangla_datasets/generation/seeds.py` | The seed sampler: reads the recipe and expands task goals across persona axes, domains and tool subsets. |
-| `recipes/agentic_v1.yaml` | The generation recipe: domain weights, persona axes, goal templates. |
-| `scripts/lre_analysis.py` | Produces every number in the paper. Offline, no network. |
-| `scripts/lre_tables.py` | Renders those numbers into the paper's LaTeX tables. |
-| `scripts/lre_add_flags.py` | Attaches the validation flags to the corpus and writes the release bundle. |
+| Corpus, splits, checksums (CC BY 4.0) | <https://huggingface.co/datasets/abubakar-siddik/Jontro> |
+| Code (MIT) | this repository |
 
-## What is and is not exercised
+This repository contains what is needed to load and validate the corpus, rebuild the
+goal-disjoint split, score a model on the benchmark, and regenerate the corpus.
 
-The full construction pipeline is released: the seed sampler, the provider client,
-the turn-protocol orchestrator, the simulators, and the three deterministic
-validation gates. With a Gemini API key you can regenerate or extend the corpus
-from `recipes/agentic_v1.yaml`.
-
-Validation is deterministic only: schema, simulator-replay consistency, and
-heuristics. The corpus was not filtered by an LLM judge and carries no judge
-verdicts; every reported number is recomputable offline from the released code
-and data.
-
-## Reproducing the paper
-
-The analysis runs offline after downloading the public release artifacts. No model
-calls or API keys are required.
+## Quick start
 
 ```bash
-pip install -e .
-
-# Download the release artifacts and place them under the paths consumed by the
-# scripts, or adapt the paths in your local invocation. The exact public layout is
-# documented in the dataset card.
-
-python scripts/lre_analysis.py    # -> outputs/lre/analysis.json, outputs/splits_v2/
-python scripts/lre_tables.py      # -> the paper's LaTeX tables
-python scripts/lre_add_flags.py   # -> outputs/release_v2/ with validation flags
+pip install -e ".[dev]"
+python scripts/fetch_release.py     # downloads the release into outputs/, verifies checksums
+pytest                              # 149 tests, run against the real release
 ```
 
-`lre_tables.py` regenerates every data table in the paper after its documented
-input artifacts are available locally. The tables are generated rather than
-transcribed, so a mismatch between the paper and the corpus is detectable.
+Check the benchmark harness offline, with no API key. The gold replay scores 100% on
+every metric by construction:
+
+```bash
+python scripts/run_multiturn_baselines.py --protocol teacher_forced --oracle
+python scripts/run_multiturn_baselines.py --protocol interactive --oracle
+python scripts/score_multiturn.py --protocol teacher_forced
+```
+
+Rebuild the goal-disjoint split (1,300 train and 700 test conversations, 105 and 48
+goals, no goal shared between them) and the corpus statistics:
+
+```bash
+python scripts/make_splits.py
+python scripts/jontro2_stats.py
+```
+
+## The benchmark
+
+A *decision point* is an assistant message that carries at least one tool call; parallel
+calls in one message are scored as an unordered set. The test split has 1,720 decision
+points. Two protocols are implemented:
+
+- **Teacher-forced**: one prediction per decision point, given the gold history.
+- **Interactive**: the model drives every step, each call is executed by the simulator and the
+  result is fed back before the next user turn.
+
+Metrics are tool selection, argument-value exactness (compared with gold values, not only
+JSON-schema validity), slot accuracy and an error taxonomy, all with 95% bootstrap intervals
+clustered by task goal. Score on the **goal-disjoint** split: an id-level split places
+paraphrases of every test goal in training.
+
+To evaluate your own model, point the harness at any OpenAI-compatible endpoint:
+
+```bash
+export EVAL_API_KEY=... EVAL_BASE_URL=https://...
+python scripts/run_multiturn_baselines.py --protocol teacher_forced
+python scripts/score_multiturn.py --protocol teacher_forced
+```
+
+Runs are resumable, and `--limit` caps a rate-limited batch.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `src/bangla_datasets/schema.py` | Trajectory schema. Load the corpus with this. |
+| `src/bangla_datasets/tools/` | Tool catalogue and the deterministic simulators. |
+| `src/bangla_datasets/validation/` | The deterministic gates: schema, simulator-replay consistency, heuristics. |
+| `src/bangla_datasets/utils/script.py` | Bangla script and address-register marker detection. |
+| `src/bangla_datasets/eval/` | Teacher-forced and interactive evaluation, scoring. |
+| `src/bangla_datasets/generation/` | Seed sampler and the turn-protocol orchestrators used to generate the corpus. |
+| `src/bangla_datasets/gemini/` | Provider client and the persona, register and assistant prompts. |
+| `src/bangla_datasets/splits/` | Goal-disjoint partitioning and Parquet I/O. |
+| `recipes/agentic_v1.yaml` | Generation recipe: domains, persona axes, goal templates. |
+| `scripts/` | Splits, statistics, baselines, scoring, table generation, release building. |
+| `jontro_modal/` | LoRA fine-tuning and benchmark runs on Modal (see its README). |
+| `retention/`, `mix/` | Retention protocol and the replay mix used in the fine-tuning experiments. |
+| `tests/` | Test suite. |
+
+## What runs offline
+
+Needs only the public release: the tests, the oracle self-check, split construction, corpus
+statistics and the validation gates.
+
+Needs model access: scoring a real model (an OpenAI-compatible endpoint), regenerating the
+corpus (a Gemini API key), the LoRA fine-tuning runs (a GPU or Modal account) and the retention
+judge. The fine-tuned adapters are not released, so the paper's fine-tuned rows cannot be
+re-scored from this repository alone. The released `baselines/` folder in the dataset repository
+holds the reported scores.
 
 ## Regenerating the corpus
 
-The generation pipeline is released and reproducible from the recipe. This
-*requires* model calls (unlike the analysis above) and a Gemini API key:
-
 ```bash
-pip install -e ".[generate]"
+pip install -e ".[dev]"
 export GEMINI_API_KEY=...
-
-# generation is driven by the orchestrator over the recipe's seed plan;
-# see src/bangla_datasets/generation/orchestrator.py and seeds.py
 ```
 
-The corpus's stored `seed` and `sim_seeds` fields make each trajectory
-byte-reproducible: given the same seed plan and the same model responses, the
-simulator results are deterministic. Note that model responses are themselves
-non-deterministic across provider versions, so a regeneration produces an
-*equivalent* corpus rather than a byte-identical one unless the original model
-responses are replayed.
+Generation is driven by `src/bangla_datasets/generation/` over the seed plan in
+`recipes/agentic_v1.yaml`. Simulator results are deterministic from the stored seeds, but model
+responses vary across provider versions, so regeneration gives an equivalent corpus, not an
+identical one. The generating model's identifier was not stored per record.
 
-## Adding a model to the evaluation
+## Limitations
 
-`eval/client.py` speaks the OpenAI Chat Completions shape, so any
-OpenAI-compatible provider works. Set `EVAL_API_KEY` and `EVAL_BASE_URL`, then
-score with `eval/scoring.py`. The paper's runs used temperature 0, one sample per
-item, and the provider's native tool-calling parameter.
-
-Please score on the **goal-disjoint** split. The corpus is a paraphrase expansion
-of 317 task goals, and the older address-form-stratified split places paraphrases
-of every test goal in the training partition (§5.2). It is retained only so that
-previously published numbers remain reproducible.
-
-## Known defects
-
-The corpus is unfiltered and contains documented defect classes — 468 reference
-responses that make no tool call, address-form labels that are partly inferred
-rather than observed, and an empty *tui*×Banglish cell. Section 5.5 and Section 8
-of the paper enumerate them with counts, and `scripts/lre_add_flags.py` writes a
-flag onto every affected record so you can filter them. Read those before training
-on this.
+The corpus is synthetic: both sides of each conversation were generated by a language model,
+the 153 task goals repeat across records, and Banglish argument matching is strict because the
+script has no standard spelling. Human review covered a stratified sample and was done by two
+authors without independent double annotation. The paper discusses these and other limits.
+Read it before training on the data.
 
 ## Citation
 
 ```bibtex
-@article{siddik2026jontro,
-  title  = {Jontro: a {Bangla} tool-use corpus and a first-call diagnostic for
-            {Bangla}-language agents},
-  author = {Siddik, Abu Bakar},
+@misc{siddik2026jontro,
+  title  = {Jontro: A Multi-Turn {Bangla} and {Banglish} Tool-Use Corpus and Benchmark},
+  author = {Siddik, Abu Bakar and Islam, Afroza and Abhi, Sarafat Hussain},
   year   = {2026},
   note   = {Under review}
 }
@@ -119,4 +128,4 @@ on this.
 
 ## Licence
 
-MIT, see `LICENSE`. The corpus is licensed separately under CC-BY-4.0.
+Code: MIT, see `LICENSE`. Corpus: CC BY 4.0, see the dataset card.

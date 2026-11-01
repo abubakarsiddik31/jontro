@@ -1,7 +1,6 @@
-"""Typed Gemini client: persona/user and assistant turns, with retry and cost caps."""
+"""Typed Gemini client: persona/user, assistant, judge. Retry + cost-capped."""
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -12,12 +11,41 @@ from dataclasses import dataclass, field
 from google import genai
 from google.genai import types
 
-from bangla_datasets.schema import Message, Role, ToolCall, ToolDef
+from bangla_datasets.schema import JudgeScore, Message, Role, ToolCall, ToolDef, Verdict
 
 _log = logging.getLogger("bangla_datasets.gemini")
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_MAX_RETRIES = 3
+
+# Target-register descriptors for user-turn rewrite. Keyed by (register, script).
+_REWRITE_TARGETS: dict[tuple[str, str], str] = {
+    ("tui", "bengali"): (
+        "tui (intimate): তুই/তোর সম্বোধন। খুব কাছের বন্ধুর মতো আলগা ভাষা। "
+        "ক্রিয়াপদ: করিস, দিস, দে, বলিস, যা, বল, দেখিস। সর্বনাম: তুই, তোর, তোকে।"
+    ),
+    ("tui", "banglish"): (
+        "tui (intimate): tui/tor shombodhon. khub kacher bondhur moto alga bhasha. "
+        "krijapod: koris, dis, de, bolis, ja, bol, dekhis. sorbonam: tui, tor, toke."
+    ),
+    ("tumi", "bengali"): (
+        "tumi (familiar): তুমি/তোমাকে সম্বোধন। বন্ধু বা পরিচিতের মতো বন্ধুত্বপূর্ণ ভাষা। "
+        "ক্রিয়াপদ: করো, দেখো, দাও, বলো, কর, দেবে। সর্বনাম: তুমি, তোমার, তোমাকে।"
+    ),
+    ("tumi", "banglish"): (
+        "tumi (familiar): tumi/tomake shombodhon. bondhu ba porichiter moto "
+        "bondhuttopurno bhasha. krijapod: koro, dekho, dao, bolo, kor, debe. "
+        "sorbonam: tumi, tomar, tomake."
+    ),
+    ("apni", "bengali"): (
+        "apni (formal): আপনি সম্বোধন। শ্রদ্ধাশীল ও আনুষ্ঠানিক ভাষা। "
+        "ক্রিয়াপদ: করবেন, পারবেন, করুন, দেবেন, জানাবেন। সর্বনাম: আপনি, আপনার।"
+    ),
+    ("apni", "banglish"): (
+        "apni (formal): apni shombodhon. shroddhashil o anusthanik bhasha. "
+        "krijapod: korben, parben, korun, deben, janaben. sorbonam: apni, apnar."
+    ),
+}
 
 
 @dataclass
@@ -190,6 +218,7 @@ class GeminiClient:
 
         tool_calls: list[ToolCall] = []
         for i, fc in enumerate(resp.function_calls or []):
+            import base64
             sig_b64 = base64.b64encode(sig_by_index[i]).decode() if i in sig_by_index else None
             # Preserve the model-assigned id when present (3.x); fall back to a
             # deterministic id for 2.x models that don't emit one.
@@ -204,16 +233,221 @@ class GeminiClient:
         self._track_usage(resp, text)
         return AssistantResponse(text=text, tool_calls=tool_calls)
 
+    def judge(self, trajectory_json: str, rubric_prompt: str) -> Verdict:
+        """Score a finished trajectory. Returns a Verdict with 5 JudgeScores."""
+        self._check_budget(est_tokens=2000)
+        contents = rubric_prompt + "\n\nট্রাজেক্টরি:\n" + trajectory_json
+
+        def call() -> types.GenerateContentResponse:
+            return self._client.models.generate_content(
+                model=self._model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "scores": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "dimension": {"type": "string"},
+                                        "score": {"type": "integer"},
+                                        "reason": {"type": "string"},
+                                    },
+                                    "required": ["dimension", "score", "reason"],
+                                },
+                            }
+                        },
+                        "required": ["scores"],
+                    },
+                    temperature=0.2,
+                ),
+            )
+        resp = self._with_retry(call)
+        data = json.loads(resp.text or "{}")
+        self._track_usage(resp, trajectory_json)
+        scores = [JudgeScore(**s) for s in data.get("scores", [])]
+        passed = all(s.score >= 4 for s in scores)
+        return Verdict(passed=passed, scores=scores)
+
+    def classify_register(self, text: str, script: str = "bengali") -> dict:
+        """Classify a user turn's Bangla speech register (tui/tumi/apni).
+
+        Returns ``{"register": str, "confidence": float, "reason": str}``.
+        Uses JSON mode + low temperature for deterministic labels.
+        """
+        self._check_budget(est_tokens=600)
+        lang_note = "banglish (romanized bangla)" if script == "banglish" else "বাংলা (bengali script)"
+        contents = (
+            "Classify the Bangla speech register of this user utterance into exactly "
+            "one of three honorific levels:\n"
+            "- tui   (intimate: তুই/তোর, tui/tor) — very close friends, siblings. "
+            "Verb endings: দিস, করিস, দে, বলিস, রে.\n"
+            "- tumi  (familiar: তুমি/তোমাকে, tumi/tomake) — friends, colleagues. "
+            "Verb endings: করো, দেখো, দাও, বলো, দেবে.\n"
+            "- apni  (formal: আপনি, apni) — elders, strangers, officials. "
+            "Verb endings: করবেন, পারবেন, করুন, অনুগ্রহ, দেবেন.\n\n"
+            f"Utterance ({lang_note}):\n{text}\n\n"
+            "Decide based on pronouns and verb morphology (the primary signal). "
+            "If the utterance lacks decisive markers, pick the closest based on "
+            "filler words / sentence style and set confidence low."
+        )
+
+        def call() -> types.GenerateContentResponse:
+            return self._client.models.generate_content(
+                model=self._model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "register": {"type": "string", "enum": ["tui", "tumi", "apni"]},
+                            "confidence": {"type": "number"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ["register", "confidence", "reason"],
+                    },
+                    temperature=0.1,
+                ),
+            )
+        resp = self._with_retry(call)
+        data = json.loads(resp.text or "{}")
+        data.setdefault("register", "apni")
+        data.setdefault("confidence", 0.5)
+        data.setdefault("reason", "")
+        self._track_usage(resp, text)
+        return data
+
+    def classify_register_batch(self, items: list[dict]) -> list[dict]:
+        """Classify the speech register of many user turns in ONE API call.
+
+        ``items`` is a list of ``{"id": str, "text": str, "script": str}``.
+        Returns a list of ``{"id", "register", "confidence", "reason"}`` in the
+        same order. Falls back to per-item classification on any batch failure.
+        """
+        if not items:
+            return []
+        self._check_budget(est_tokens=600 * len(items))
+        numbered = "\n\n".join(
+            f"[{i}] ({it.get('script', 'bengali')}) {it['text']}"
+            for i, it in enumerate(items)
+        )
+        contents = (
+            "Classify the Bangla speech register of each numbered user utterance into "
+            "exactly one of three honorific levels:\n"
+            "- tui   (intimate: তুই/তোর) — very close friends, siblings. "
+            "Verb endings: দিস, করিস, দে, বলিস, রে.\n"
+            "- tumi  (familiar: তুমি/তোমাকে) — friends, colleagues. "
+            "Verb endings: করো, দেখো, দাও, বলো, দেবে.\n"
+            "- apni  (formal: আপনি) — elders, strangers, officials. "
+            "Verb endings: করবেন, পারবেন, করুন, অনুগ্রহ, দেবেন.\n\n"
+            "Decide based on pronouns and verb morphology. Return a JSON object with "
+            "a 'results' array, one entry per input, in order. Each entry: "
+            "{index, register, confidence (0-1), reason (short)}.\n\n"
+            f"Utterances:\n{numbered}"
+        )
+
+        def call() -> types.GenerateContentResponse:
+            return self._client.models.generate_content(
+                model=self._model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "results": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "index": {"type": "integer"},
+                                        "register": {"type": "string", "enum": ["tui", "tumi", "apni"]},
+                                        "confidence": {"type": "number"},
+                                        "reason": {"type": "string"},
+                                    },
+                                    "required": ["index", "register", "confidence", "reason"],
+                                },
+                            }
+                        },
+                        "required": ["results"],
+                    },
+                    temperature=0.1,
+                ),
+            )
+        try:
+            resp = self._with_retry(call)
+            self._track_usage(resp, numbered)
+            data = json.loads(resp.text or "{}")
+            results = {r["index"]: r for r in data.get("results", [])}
+            out = []
+            for i, it in enumerate(items):
+                r = results.get(i, {})
+                out.append({
+                    "id": it["id"],
+                    "register": r.get("register", "apni"),
+                    "confidence": r.get("confidence", 0.5),
+                    "reason": r.get("reason", ""),
+                })
+            return out
+        except Exception as e:  # noqa: BLE001
+            _log.warning("batch classify failed (%s); falling back to per-item", e)
+            return [self._classify_one_fallback(it) for it in items]
+
+    def _classify_one_fallback(self, it: dict) -> dict:
+        """Per-item fallback if a batch call fails."""
+        try:
+            r = self.classify_register(it["text"], script=it.get("script", "bengali"))
+            return {"id": it["id"], "register": r["register"],
+                    "confidence": r["confidence"], "reason": r.get("reason", "")}
+        except Exception:  # noqa: BLE001
+            return {"id": it["id"], "register": "apni", "confidence": 0.0, "reason": "fallback"}
+
+    def rewrite_user_turn(self, text: str, target_register: str, script: str = "bengali") -> str:
+        """Rewrite a user turn's verb morphology to match ``target_register``.
+
+        Preserves all entities, numbers, IDs, and tool-relevant tokens; changes
+        only pronouns, verb endings, fillers, and honorifics.
+        """
+        self._check_budget(est_tokens=800)
+        desc = _REWRITE_TARGETS.get((target_register, script))
+        if desc is None:
+            # fallback: bengali descriptors
+            desc = _REWRITE_TARGETS.get((target_register, "bengali"))
+        if desc is None:
+            return text  # unknown target — leave unchanged
+        lang_note = "banglish (romanized)" if script == "banglish" else "বাংলা লিপিতে (bengali script)"
+        contents = (
+            f"এই বাক্যটি পুনরায় লিখুন যাতে এটি নিচের register মেনে চলে:\n{desc}\n\n"
+            f"নিয়ম (STRICT):\n"
+            "- শুধুমাত্র pronoun, verb ending, filler ও honorific পরিবর্তন করুন।\n"
+            "- সংখ্যা, নাম, ID, অ্যাকাউন্ট নম্বর, তারিখ, মূল্রমান একদম অপরিবর্তিত রাখুন।\n"
+            "- অর্থ ও তথ্য অপরিবর্তিত রাখুন — শুধু speech register পাল্টান।\n"
+            f"- উত্তর {lang_note}-এ দিন, শুধু পুনরায় লেখা বাক্যটি (কোনো ব্যাখ্যা নয়)।\n\n"
+            f"মূল বাক্য:\n{text}"
+        )
+
+        def call() -> types.GenerateContentResponse:
+            return self._client.models.generate_content(
+                model=self._model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="text/plain",
+                    temperature=0.3,
+                ),
+            )
+        resp = self._with_retry(call)
+        out = (resp.text or "").strip()
+        self._track_usage(resp, text)
+        return out
+
     @staticmethod
     def _history_to_contents(history: list[Message]) -> list[types.Content]:
-        """Remap the stored message history into google-genai ``Content`` objects.
-
-        Gemini's API differs from the stored model in two places this handles:
-        function-response parts must carry role ``"user"`` (not ``"tool"``), and
-        each function-call part may need its captured ``thought_signature``
-        replayed for Gemini 3.x models. Tool results are passed as parsed
-        objects, not double-encoded JSON strings.
-        """
+        import base64
+        import json as _json
         out: list[types.Content] = []
         for m in history:
             if m.role is Role.SYSTEM:
@@ -250,7 +484,7 @@ class GeminiClient:
                                 tc_name = tc.name
                                 break
                 try:
-                    result_obj = json.loads(m.content or "{}")
+                    result_obj = _json.loads(m.content or "{}")
                 except (ValueError, TypeError):
                     result_obj = {"result": m.content or ""}
                 parts.append(types.Part(function_response=types.FunctionResponse(

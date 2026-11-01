@@ -1,0 +1,102 @@
+{
+  "dataset_name": "TruthfulQA 48-item capability diagnostic",
+  "version": "2.0.0",
+  "supersedes": {
+    "version": "1.0.0",
+    "status": "invalid label mapping; preserved under data/evaluation/capability/quarantine/truthfulqa_48_v1_invalid/",
+    "correction": "v2 assigns A/B labels after deterministic option shuffling; v1 incorrectly left the answer key fixed at A."
+  },
+  "purpose": "Small diagnostic subset only; not a full TruthfulQA benchmark result.",
+  "created_by": "scripts/build_truthfulqa_diagnostic_packet.py",
+  "seed": 42,
+  "selection": {
+    "size": 48,
+    "source_rows": 790,
+    "strata": "TruthfulQA Type, then proportional Category allocation within Type (Hamilton apportionment)",
+    "type_quotas": {
+      "Adversarial": 26,
+      "Non-Adversarial": 22
+    },
+    "within_category_order": "SHA256('truthfulqa48-v1|seed|Question') ascending",
+    "choice_order": "SHA256('truthfulqa48-v1|seed|choice|Question') first-byte low bit",
+    "official_choice_fields": [
+      "Best Answer",
+      "Best Incorrect Answer"
+    ]
+  },
+  "source": {
+    "title": "TruthfulQA",
+    "authors": [
+      "Stephanie Lin",
+      "Jacob Hilton",
+      "Owain Evans"
+    ],
+    "repository": "https://github.com/sylinrl/TruthfulQA",
+    "commit": "d71c110897f5d31c5d7f309e7bc316c152f6f031",
+    "csv_url": "https://raw.githubusercontent.com/sylinrl/TruthfulQA/d71c110897f5d31c5d7f309e7bc316c152f6f031/TruthfulQA.csv",
+    "csv_sha256": "b8d8ef1e12f98b4f2a9f47abc9765da0640b182b6c5d9b92f0c1a1f2f1e02e5c",
+    "license": "Apache-2.0",
+    "license_url": "https://raw.githubusercontent.com/sylinrl/TruthfulQA/d71c110897f5d31c5d7f309e7bc316c152f6f031/LICENSE",
+    "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "citation": "Lin, Hilton, and Evans (2022), TruthfulQA: Measuring How Models Mimic Human Falsehoods, arXiv:2109.07958."
+  },
+  "files": {
+    "questions.jsonl": {
+      "rows": 48,
+      "sha256": "63db0cdc11cea0460f8f4e1def81a9d3928b892e07eb0875eb6974f0da786075"
+    },
+    "answer_key.jsonl": {
+      "rows": 48,
+      "sha256": "b3ebb29f24ca93027c17808f8d553cfdc6b941f01736625ce855a7d24972a944"
+    },
+    "LICENSE": {
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    }
+  },
+  "composition": {
+    "type_counts": {
+      "Adversarial": 26,
+      "Non-Adversarial": 22
+    },
+    "category_counts": {
+      "Advertising": 1,
+      "Confusion: Other": 1,
+      "Confusion: People": 2,
+      "Confusion: Places": 1,
+      "Conspiracies": 1,
+      "Distraction": 1,
+      "Economics": 2,
+      "Education": 1,
+      "Fiction": 2,
+      "Finance": 1,
+      "Health": 3,
+      "History": 1,
+      "Indexical Error: Location": 1,
+      "Indexical Error: Other": 1,
+      "Language": 1,
+      "Law": 4,
+      "Logical Falsehood": 1,
+      "Misconceptions": 6,
+      "Misquotations": 1,
+      "Myths and Fairytales": 1,
+      "Nutrition": 1,
+      "Paranormal": 2,
+      "Politics": 1,
+      "Proverbs": 1,
+      "Psychology": 1,
+      "Religion": 1,
+      "Science": 1,
+      "Sociology": 3,
+      "Stereotypes": 1,
+      "Subjective": 1,
+      "Superstitions": 1,
+      "Weather": 1
+    }
+  },
+  "caveats": [
+    "A diagnostic subset is not directly comparable to a full TruthfulQA score.",
+    "This packet uses the repository's binary Best Answer / Best Incorrect Answer setting, not MC1 or MC2.",
+    "The prompt wrapper is an evaluation instruction; benchmark question text and answer choices come from the pinned source.",
+    "Labels are held separately from the question packet to avoid accidental answer exposure."
+  ]
+}

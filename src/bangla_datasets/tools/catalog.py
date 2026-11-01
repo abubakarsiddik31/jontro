@@ -177,6 +177,17 @@ GET_SERVICE_STATUS = ToolDef(
         "required": ["service_type", "app_id"],
     },
 )
+WEB_SEARCH = ToolDef(
+    name="web_search",
+    description="Search the web for public information, government rules, toll rates, procedures, schedules, or general knowledge in Bangladesh when no specialized tool exists.",
+    parameters_json_schema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query in Bangla or English, e.g. 'পদ্মা সেতু টোল' or 'metro rail friday schedule'"},
+        },
+        "required": ["query"],
+    },
+)
 
 # --- Agri + weather ---
 GET_WEATHER = ToolDef(
@@ -405,6 +416,21 @@ BOOK_TOUR = ToolDef(
             "travelers": {"type": "integer"},
         },
         "required": ["package_id", "traveler_name", "travelers"],
+    },
+)
+BOOK_HOTEL = ToolDef(
+    name="book_hotel",
+    description="Book a hotel room in a destination.",
+    parameters_json_schema={
+        "type": "object",
+        "properties": {
+            "hotel_id": {"type": "string", "description": "e.g. H1744"},
+            "guest_name": {"type": "string"},
+            "check_in": {"type": "string", "description": "ISO date YYYY-MM-DD"},
+            "check_out": {"type": "string", "description": "ISO date YYYY-MM-DD"},
+            "room_type": {"type": "string", "enum": ["single", "deluxe", "suite"]},
+        },
+        "required": ["hotel_id", "guest_name", "check_in", "check_out"],
     },
 )
 
@@ -718,14 +744,14 @@ DOMAIN_TOOLS: dict[str, list[ToolDef]] = {
     "mobile_finance": [SEND_MONEY, CHECK_BALANCE, PAY_BILL],
     "healthcare": [SEARCH_DOCTORS, GET_AVAILABLE_SLOTS, BOOK_APPOINTMENT],
     "ecommerce": [SEARCH_PRODUCTS, GET_ORDER_STATUS, REQUEST_RETURN],
-    "govt_services": [GET_SERVICE_STATUS],
+    "govt_services": [GET_SERVICE_STATUS, WEB_SEARCH],
     "agri_weather": [GET_WEATHER, GET_CROP_ADVISORY],
     "news": [SEARCH_NEWS],
     "telecom": [RECHARGE_MOBILE, BUY_DATA_PACK],
     # New Bangladesh-focused domains
     "sports_scores": [GET_LIVE_SCORE, GET_MATCH_SCHEDULE, GET_PLAYER_STATS, GET_STANDINGS],
     "food_delivery": [SEARCH_RESTAURANTS, GET_MENU, PLACE_ORDER, TRACK_DELIVERY],
-    "travel_planning": [SEARCH_DESTINATIONS, GET_PACKAGES, CHECK_HOTEL_AVAILABILITY, BOOK_TOUR],
+    "travel_planning": [SEARCH_DESTINATIONS, GET_PACKAGES, CHECK_HOTEL_AVAILABILITY, BOOK_TOUR, BOOK_HOTEL],
     "education": [SEARCH_UNIVERSITIES, GET_ADMISSION_INFO, CHECK_RESULT, GET_SCHOLARSHIP_LIST],
     "bus_launch_booking": [
         SEARCH_BUS_ROUTES, SEARCH_LAUNCH_ROUTES, GET_TRANSPORT_FARE, BOOK_TRANSPORT_TICKET,

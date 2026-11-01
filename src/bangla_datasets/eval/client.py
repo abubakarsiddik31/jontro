@@ -17,11 +17,10 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from openai import OpenAI, RateLimitError
-from openai.types.chat import ChatCompletion
 
 from bangla_datasets.eval.task import build_chat_messages, build_tools_param
 from bangla_datasets.schema import ToolCall, Trajectory
@@ -40,11 +39,21 @@ MAX_BACKOFF = 120.0
 
 @dataclass
 class Prediction:
-    """One model prediction for one eval example."""
+    """One model prediction for one eval example.
 
-    tool_call: ToolCall | None
-    raw_text: str
+    ``tool_calls`` holds every call the model emitted — multi-turn Jontro
+    trajectories routinely issue several parallel calls per assistant turn, so
+    keeping only the first would discard most of the signal. ``tool_call``
+    returns the first call for the single-turn path.
+    """
+
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    raw_text: str = ""
     error: str | None = None
+
+    @property
+    def tool_call(self) -> ToolCall | None:
+        return self.tool_calls[0] if self.tool_calls else None
 
 
 def parse_tool_calls(raw: list[dict[str, Any]] | None) -> list[ToolCall]:
@@ -92,7 +101,7 @@ class EvalClient:
             timeout=timeout,
         )
 
-    def _create_with_backoff(self, traj: Trajectory, **kwargs: Any) -> ChatCompletion:
+    def _create_with_backoff(self, tag: str, **kwargs: Any):
         """Call the endpoint, retrying 429s with exponential backoff."""
         backoff = INITIAL_BACKOFF
         for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
@@ -106,7 +115,7 @@ class EvalClient:
                 wait = min(float(wait), MAX_BACKOFF)
                 _log.warning(
                     "rate limited on %s (attempt %d/%d); sleeping %.1fs",
-                    traj.id,
+                    tag,
                     attempt + 1,
                     MAX_RATE_LIMIT_RETRIES,
                     wait,
@@ -114,30 +123,45 @@ class EvalClient:
                 time.sleep(wait)
                 backoff = min(backoff * 2, MAX_BACKOFF)
 
-    def predict(self, traj: Trajectory) -> Prediction:
+    def predict_messages(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        tag: str = "",
+    ) -> Prediction:
+        """Predict the next assistant turn for an arbitrary message prefix.
+
+        This is the primitive both protocols use. ``tools`` may be empty/None
+        for a no-tools call. All emitted tool calls are returned.
+        """
         kwargs: dict[str, Any] = {
             "model": self.model,
-            "messages": build_chat_messages(traj),
+            "messages": messages,
             "temperature": 0.0,
         }
-        if self.use_tools_param:
-            kwargs["tools"] = build_tools_param(traj)
+        if self.use_tools_param and tools:
+            kwargs["tools"] = tools
         try:
-            resp = self._create_with_backoff(traj, **kwargs)
+            resp = self._create_with_backoff(tag, **kwargs)
         except Exception as exc:  # noqa: BLE001 - surface as Prediction.error
-            _log.warning("request failed for %s: %s", traj.id, exc)
-            return Prediction(tool_call=None, raw_text="", error=str(exc))
+            _log.warning("request failed for %s: %s", tag, exc)
+            return Prediction(tool_calls=[], raw_text="", error=str(exc))
 
         # Some providers (e.g. free-tier hosted models) return responses with no
         # choices at all (empty completion / content filter). Treat as no call.
         if not resp.choices:
-            return Prediction(tool_call=None, raw_text="", error="empty_response")
+            return Prediction(tool_calls=[], raw_text="", error="empty_response")
         choice = resp.choices[0].message
         raw_tcs = (
             [tc.model_dump() for tc in choice.tool_calls] if choice.tool_calls else None
         )
-        tcs = parse_tool_calls(raw_tcs)
         return Prediction(
-            tool_call=tcs[0] if tcs else None,
+            tool_calls=parse_tool_calls(raw_tcs),
             raw_text=choice.content or "",
+        )
+
+    def predict(self, traj: Trajectory) -> Prediction:
+        """Single-turn prediction: system prompt + first user turn."""
+        return self.predict_messages(
+            build_chat_messages(traj), build_tools_param(traj), tag=traj.id
         )

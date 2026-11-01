@@ -154,11 +154,20 @@ class Trajectory(BaseModel):
         return self
 
 
+class JudgeScore(BaseModel):
+    """One dimension of the judge's rubric, scored 1-5."""
+
+    dimension: str
+    score: int = Field(ge=1, le=5)
+    reason: str
+
+
 class Verdict(BaseModel):
     """Validation result for one trajectory."""
 
     trajectory_id: str = ""
     passed: bool
     stage_failed: str | None = None
+    scores: list[JudgeScore] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     hash: str = ""

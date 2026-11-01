@@ -28,6 +28,16 @@ def has_latin(text: str) -> bool:
     return bool(_LATIN_RE.search(text))
 
 
+def is_banglish(text: str) -> bool:
+    """Heuristic: Romanized Bangla — has Latin letters but no Bengali script.
+
+    Real Banglish turns (``ami dhaka jete chai``) are Latin-only; genuine Bangla
+    turns (``আমি ঢাকা যেতে চাই``) are Bengali-script. This distinguishes them so the
+    script-aware heuristics know which script requirement to enforce.
+    """
+    return has_latin(text) and not has_bengali(text)
+
+
 def is_ascii_identifier(name: str) -> bool:
     """True if *name* is a valid ASCII identifier (English/code layer)."""
     return bool(_ASCII_IDENT_RE.match(name))
@@ -175,3 +185,41 @@ def dominant_register(text: str) -> str | None:
         return None
     winners = [reg for reg, c in counts.items() if c == top]
     return winners[0] if len(winners) == 1 else None
+
+
+def cross_register_evidence(text: str, declared: str) -> dict[str, list[str]]:
+    """Markers in *text* that belong to a *different* register than ``declared``.
+
+    Returns ``{"pronouns", "imperatives", "verbs"}``:
+
+    - ``pronouns`` (তুই / তুমি / আপনি …) and ``imperatives`` (দে / দাও / করুন …)
+      are exact-token matches, so they are high-precision and safe to gate on.
+    - ``verbs`` are suffix matches and are deliberately reported separately as
+      *advisory*: short Bengali verb endings also terminate ordinary words (the
+      familiar suffix ``বে`` ends the conjunction ``তবে``), so a cross-register
+      verb hit bounds the mislabelling rate rather than proving an error.
+
+    Unknown registers yield an empty result rather than raising.
+    """
+    out: dict[str, list[str]] = {"pronouns": [], "imperatives": [], "verbs": []}
+
+    def _add(kind: str, tok: str) -> None:
+        key = tok.lower() if tok.isascii() else tok
+        if key not in out[kind]:
+            out[kind].append(key)
+
+    for t in _tokens(text):
+        low = t.lower()
+        for reg in ("tui", "tumi", "apni"):
+            if reg == declared:
+                continue
+            if t in _PRONOUNS[reg] or (t.isascii() and low in _PRONOUNS[reg]):
+                _add("pronouns", t)
+            elif t in _EXACT_TOKENS[reg] or (t.isascii() and low in _LATIN_TOKENS[reg]):
+                _add("imperatives", t)
+            else:
+                for suf in _VERB_SUFFIXES[reg]:
+                    if _ends_with(t, suf):
+                        _add("verbs", t)
+                        break
+    return out

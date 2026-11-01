@@ -3,5 +3,12 @@ __pycache__/
 .venv/
 .env
 *.egg-info/
-outputs/
 build/
+dist/
+outputs/
+out_modal/
+mlflow.db
+mlruns/
+.pytest_cache/
+.ruff_cache/
+.DS_Store

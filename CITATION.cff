@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this code or the Jontro corpus, please cite the paper."
+title: "Jontro: A Multi-Turn Bangla and Banglish Tool-Use Corpus and Benchmark"
+type: software
+authors:
+  - family-names: Siddik
+    given-names: Abu Bakar
+  - family-names: Islam
+    given-names: Afroza
+  - family-names: Abhi
+    given-names: Sarafat Hussain
+repository-code: "https://github.com/abubakarsiddik31/jontro-code"
+url: "https://huggingface.co/datasets/abubakar-siddik/Jontro"
+license: MIT
+version: 2.0.0
+date-released: "2026-11-01"

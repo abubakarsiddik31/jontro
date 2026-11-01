@@ -182,6 +182,61 @@ def _get_service_status(args: dict[str, object], rng: random.Random) -> dict[str
     }
 
 
+def _web_search(args: dict[str, object], rng: random.Random) -> dict[str, object]:
+    query = str(args.get("query", "")).lower()
+    results = []
+
+    if any(k in query for k in ["পদ্মা", "padma", "টোল", "toll"]):
+        results.append({
+            "title": "পদ্মা সেতু টোল হার ও নিয়মাবলি — বাংলাদেশ সেতু কর্তৃপক্ষ",
+            "snippet": "পদ্মা সেতুতে কার/জিপ ৭৫০ টাকা, মাইক্রোবাস ১৩০০ টাকা, ছোট বাস ১৪০০ টাকা, বড় বাস ২৪০০ টাকা, ট্রাক (৩ এক্সেল) ৫৫০০ টাকা।",
+            "source": "bba.gov.bd",
+        })
+    if any(k in query for k in ["মেট্রোরেল", "metro", "সময়", "সময়", "schedule", "mrt"]):
+        results.append({
+            "title": "ঢাকা মেট্রোরেল (MRT Line 6) সময়সূচী ও ভাড়া — DMTCL",
+            "snippet": "উত্তরা উত্তর থেকে মতিঝিল পর্যন্ত শনিবার থেকে বৃহস্পতিবার সকাল ৭:১০ থেকে রাত ৯:৪০ পর্যন্ত এবং শুক্রবার বিকাল ৩:০০ থেকে রাত ৯:৪০ পর্যন্ত চলে। সর্বনিম্ন ভাড়া ২০ টাকা, সর্বোচ্চ ১০০ টাকা। এমআরটি পাসে ১০% ছাড়।",
+            "source": "dmtcl.gov.bd",
+        })
+    if any(k in query for k in ["পাসপোর্ট", "passport", "ফি", "fee", "কাগজ"]):
+        results.append({
+            "title": "ই-পাসপোর্ট আবেদন ও ফি সংক্রান্ত নির্দেশিকা — বহিরাগমন ও পাসপোর্ট অধিদপ্তর",
+            "snippet": "৪৮ পৃষ্ঠা ৫ বছর মেয়াদি নিয়মিত ফি ৪০২৫ টাকা (জরুরি ৬৩২৫ টাকা)। ১০ বছর মেয়াদি নিয়মিত ৫৭৫০ টাকা (জরুরি ৮০৫০ টাকা)। প্রয়োজনীয় কাগজপত্র: জাতীয় পরিচয়পত্র/জন্ম নিবন্ধন ও আবেদন সামারি।",
+            "source": "epassport.gov.bd",
+        })
+    if any(k in query for k in ["টানেল", "tunnel", "কর্ণফুলী", "bangabandhu"]):
+        results.append({
+            "title": "বঙ্গবন্ধু শেখ মুজিবুর রহমান টানেল টোল তালিকা",
+            "snippet": "প্রাইভেট কার ও জিপ ২০০ টাকা, পিকআপ ২০০ টাকা, মাইক্রোবাস ২৫০ টাকা। মোটরসাইকেল ও ৩ চাকার যান চলাচল নিষিদ্ধ।",
+            "source": "bba.gov.bd",
+        })
+    if any(k in query for k in ["এক্সপ্রেসওয়ে", "expressway", "এলিভেটেড"]):
+        results.append({
+            "title": "ঢাকা এলিভেটেড এক্সপ্রেসওয়ে ব্যবহারের নিয়ম ও টোল",
+            "snippet": "কাওলা (বিমানবন্দর) থেকে ফার্মগেট পর্যন্ত কার, ট্যাক্সি, এসইউভি ও মাইক্রোবাসের টোল ৮০ টাকা। বাস ১৬০ টাকা। মোটরসাইকেল ও সিএনজি নিষিদ্ধ।",
+            "source": "rthd.gov.bd",
+        })
+    if any(k in query for k in ["সাজেক", "sajek", "আর্মি", "এসকর্ট", "escort"]):
+        results.append({
+            "title": "সাজেক ভ্যালি ভ্রমণ নির্দেশিকা ও বাঘাইহাট আর্মি এসকর্ট সময়",
+            "snippet": "বাঘাইহাট থেকে সাজেক যাওয়ার নিরাপত্তা এসকর্ট প্রতিদিন সকাল ১০:০০ টা এবং বিকাল ৩:০০ টায় ছেড়ে যায়। নির্দিষ্ট সময়ের মধ্যে পৌঁছানো বাধ্যতামূলক।",
+            "source": "touristpolice.gov.bd",
+        })
+
+    if not results:
+        results.append({
+            "title": "তথ্য ও সেবা সংক্রান্ত ফলাফল — বাংলাদেশ জাতীয় তথ্য বাতায়ন",
+            "snippet": f"'{args.get('query')}' সম্পর্কিত হালনাগাদ তথ্য, নির্দেশিকা ও সরকারি নাগরিক সেবা নির্দেশিকা।",
+            "source": "bangladesh.gov.bd",
+        })
+
+    return {
+        "query": args.get("query"),
+        "results_count": len(results),
+        "results": results,
+    }
+
+
 def _get_weather(args: dict[str, object], rng: random.Random) -> dict[str, object]:
     days = int(args.get("days", 3))  # type: ignore[arg-type]
     return {
@@ -501,17 +556,19 @@ def _get_packages(args: dict[str, object], rng: random.Random) -> dict[str, obje
 
 
 def _check_hotel_availability(args: dict[str, object], rng: random.Random) -> dict[str, object]:
+    avail = rng.random() > 0.15  # 85% available, 15% unavailable
+    hotels = [
+        {"hotel_id": f"H{rng.randint(1000, 9999)}",
+         "name": f"{args['destination']} রিসোর্ট",
+         "price_per_night_bdt": rng.randint(2500, 12000)}
+        for _ in range(rng.randint(2, 3))
+    ] if avail else []
     return {
         "destination": args["destination"],
         "check_in": args["check_in"],
         "check_out": args["check_out"],
-        "available": rng.choice([True, False]),
-        "hotels": [
-            {"hotel_id": f"H{rng.randint(1000, 9999)}",
-             "name": f"{args['destination']} রিসোর্ট",
-             "price_per_night_bdt": rng.randint(2500, 12000)}
-            for _ in range(rng.randint(2, 3))
-        ],
+        "available": avail,
+        "hotels": hotels,
     }
 
 
@@ -522,6 +579,19 @@ def _book_tour(args: dict[str, object], rng: random.Random) -> dict[str, object]
         "package_id": args["package_id"],
         "traveler_name": args["traveler_name"],
         "travelers": args["travelers"],
+    }
+
+
+def _book_hotel(args: dict[str, object], rng: random.Random) -> dict[str, object]:
+    return {
+        "status": "confirmed",
+        "booking_id": f"HTL-{rng.randint(100000, 999999)}",
+        "hotel_id": args["hotel_id"],
+        "guest_name": args["guest_name"],
+        "check_in": args["check_in"],
+        "check_out": args["check_out"],
+        "room_type": args.get("room_type", "deluxe"),
+        "total_bdt": rng.randint(2500, 15000),
     }
 
 
@@ -873,6 +943,7 @@ _SIMULATORS: dict[str, _Simulator] = {
     "get_order_status": _get_order_status,
     "request_return": _request_return,
     "get_service_status": _get_service_status,
+    "web_search": _web_search,
     "get_weather": _get_weather,
     "get_crop_advisory": _get_crop_advisory,
     "search_news": _search_news,
@@ -891,6 +962,7 @@ _SIMULATORS: dict[str, _Simulator] = {
     "get_packages": _get_packages,
     "check_hotel_availability": _check_hotel_availability,
     "book_tour": _book_tour,
+    "book_hotel": _book_hotel,
     "search_universities": _search_universities,
     "get_admission_info": _get_admission_info,
     "check_result": _check_result,

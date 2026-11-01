@@ -1,31 +1,53 @@
 [project]
 name = "jontro"
-version = "1.1.0"
-description = "Code for the Jontro Bangla tool-use corpus and first-call diagnostic"
+version = "2.0.0"
+description = "Code for Jontro 2.0: a multi-turn Bangla and Banglish tool-use corpus and benchmark."
 readme = "README.md"
+requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Abu Bakar Siddik" }]
-requires-python = ">=3.10"
+authors = [
+    { name = "Abu Bakar Siddik" },
+    { name = "Afroza Islam" },
+    { name = "Sarafat Hussain Abhi" },
+]
 dependencies = [
-  "pydantic>=2.0",
-  "jsonschema>=4.0",
-  "pyarrow>=14.0",
-  "pyyaml>=6.0",
+    "google-genai>=1.0.0",
+    "pydantic>=2.6",
+    "huggingface_hub>=0.24",
+    "pyyaml>=6.0",
+    "rich>=13.7",
+    "pandas>=2.2",
+    "pyarrow>=15.0",
+    "python-dotenv>=1.0",
+    "openai>=1.40",
+    "jsonschema>=4.20",
+    "matplotlib>=3.8",
 ]
 
 [project.optional-dependencies]
-# Only needed to query model endpoints; the paper's analysis runs without it.
-eval = ["openai>=1.0"]
-# Only needed to regenerate the corpus (generation orchestrator).
-# The orchestrator imports google-genai; everything else runs without it.
-generate = ["google-genai>=1.0", "openai>=1.0"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.6"]
 
 [project.urls]
 Dataset = "https://huggingface.co/datasets/abubakar-siddik/Jontro"
+Code = "https://github.com/abubakarsiddik31/jontro-code"
+
+[project.scripts]
+bangla-datasets = "bangla_datasets.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/bangla_datasets"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
