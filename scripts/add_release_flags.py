@@ -1,4 +1,4 @@
-"""Attach deterministic validation flags to the released Jontro 2.0 corpus.
+"""Attach deterministic validation flags to the released Jontro corpus.
 
 The generation gates run at build time and reject candidates, but the released
 records carried no per-item verdict, so a downstream user had nothing to filter

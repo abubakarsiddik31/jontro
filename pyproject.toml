@@ -1,7 +1,7 @@
 [project]
 name = "jontro"
 version = "2.0.0"
-description = "Code for Jontro 2.0: a multi-turn Bangla and Banglish tool-use corpus and benchmark."
+description = "Code for Jontro: a multi-turn Bangla and Banglish tool-use corpus and benchmark."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

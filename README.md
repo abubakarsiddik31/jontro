@@ -1,4 +1,4 @@
-# Jontro 2.0: code
+# Jontro: code
 
 Code for **"Jontro: A Multi-Turn Bangla and Banglish Tool-Use Corpus and Benchmark"**
 (Abu Bakar Siddik, Afroza Islam and Sarafat Hussain Abhi; under review).

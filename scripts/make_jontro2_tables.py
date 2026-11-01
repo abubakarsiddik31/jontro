@@ -1,5 +1,5 @@
 # ruff: noqa: E501  -- generated LaTeX table rows read better unwrapped
-"""Generate the LaTeX tables for the Jontro 2.0 manuscript from real artifacts.
+"""Generate the LaTeX tables for the Jontro manuscript from real artifacts.
 
 Inputs (never hand-edited):
 - outputs/stats/jontro2_stats.json      (scripts/jontro2_stats.py)

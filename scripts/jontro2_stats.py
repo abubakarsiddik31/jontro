@@ -1,4 +1,4 @@
-"""Recompute every corpus statistic the Jontro 2.0 paper cites.
+"""Recompute every corpus statistic the Jontro paper cites.
 
 Single source of truth: reads the released canonical JSONL, the split id
 manifests, and the goal manifest, and writes

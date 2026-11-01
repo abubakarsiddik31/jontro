@@ -1,5 +1,5 @@
 # ruff: noqa: E501  -- LaTeX fragments are more readable unwrapped
-"""Render one real Jontro 2.0 conversation to LaTeX for the manuscript.
+"""Render one real Jontro conversation to LaTeX for the manuscript.
 
 The example is selected by an objective rule, not by hand: among test-split
 conversations that contain at least two decision points and at least one turn

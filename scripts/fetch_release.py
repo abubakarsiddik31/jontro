@@ -1,4 +1,4 @@
-"""Download the public Jontro 2.0 release and lay it out where the code expects it.
+"""Download the public Jontro release and lay it out where the code expects it.
 
 The scripts and tests in this repository read the corpus, the goal-disjoint splits
 and the Parquet files from ``outputs/``. This script fills that directory from the
